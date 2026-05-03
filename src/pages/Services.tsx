@@ -320,17 +320,17 @@ export default function Services() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { display: 'flex', flexDirection: 'column', gap: '1.5rem' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
+  container: { display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1rem' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' },
   title: { fontSize: '1.75rem', fontWeight: 700, color: '#1f2937', margin: 0 },
   subtitle: { fontSize: '0.875rem', color: '#6b7280', marginTop: '0.25rem' },
   addButton: { display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1rem', backgroundColor: '#e19c96', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer' },
   toolbar: { display: 'flex', gap: '1rem' },
-  searchBox: { display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.625rem 1rem', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', flex: 1, maxWidth: '400px' },
+  searchBox: { display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.625rem 1rem', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', flex: '1 1 100%', maxWidth: '400px' },
   searchInput: { border: 'none', outline: 'none', fontSize: '0.875rem', width: '100%', color: '#1f2937' },
   loading: { textAlign: 'center', padding: '3rem', color: '#6b7280' },
   empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem', backgroundColor: 'white', borderRadius: '12px', gap: '1rem', color: '#9ca3af' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' },
   card: { padding: '1.25rem', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative' },
   cardHeader: { display: 'flex', flexDirection: 'column', gap: '0.25rem' },
   cardTitleRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
