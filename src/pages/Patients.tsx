@@ -843,7 +843,22 @@ export default function Patients() {
                   <Stethoscope size={14} />
                 </button>
                 {patient.whatsapp && (
-                  <span style={styles.whatsappTag}><MessageCircle size={14} /> {patient.whatsapp}</span>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); sendWhatsAppMessage(patient) }}
+                      style={styles.whatsappBtn}
+                      title="Enviar mensaje"
+                    >
+                      <MessageCircle size={14} />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); sendGoogleReview(patient) }}
+                      style={sentReviews.has(patient.id) ? styles.reviewSentBtn : styles.reviewBtn}
+                      title="Enviar review"
+                    >
+                      {sentReviews.has(patient.id) ? '✓' : '⭐'}
+                    </button>
+                  </div>
                 )}
                 <ChevronLeft size={20} color="#9ca3af" style={{ transform: 'rotate(180deg)' }} />
               </div>
