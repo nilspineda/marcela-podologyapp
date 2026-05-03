@@ -102,15 +102,22 @@ export default function Services() {
       is_active: formData.is_active
     }
 
+    let result
     if (editingService) {
-      await supabase
+      result = await supabase
         .from('services')
         .update({ ...serviceData, updated_at: new Date().toISOString() })
         .eq('id', editingService.id)
     } else {
-      await supabase
+      result = await supabase
         .from('services')
         .insert([serviceData])
+    }
+
+    if (result.error) {
+      alert('Error al guardar servicio: ' + result.error.message)
+      console.error('Error:', result.error)
+      return
     }
 
     loadServices()

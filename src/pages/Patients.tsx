@@ -6,11 +6,9 @@ import {
   Plus, Search, Pencil, Trash2, X, User, Phone, Mail, Calendar, 
   MessageCircle, Clock, Eye, Stethoscope, FileText,
   ChevronLeft, AlertCircle, Bell, MapPin, CreditCard, UserPlus,
-  ArrowLeft, Camera, Upload
+  ArrowLeft
 } from 'lucide-react'
 import LexicalEditor from '../components/LexicalEditor'
-import PatientImages from '../components/PatientImages'
-import { uploadToR2 } from '../lib/r2'
 
 interface Patient {
   id: string
@@ -101,12 +99,6 @@ export default function Patients() {
     price_paid: '',
     treatment_date: new Date().toISOString().split('T')[0]
   })
-
-  const [newPatientImages, setNewPatientImages] = useState<File[]>([])
-  const [newPatientImageUrls, setNewPatientImageUrls] = useState<string[]>([])
-
-  const [treatmentImages, setTreatmentImages] = useState<File[]>([])
-  const [treatmentImageUrls, setTreatmentImageUrls] = useState<string[]>([])
 
   const { user } = useAuthStore()
   const navigate = useNavigate()
@@ -248,24 +240,6 @@ export default function Patients() {
       return
     }
 
-    if (patientData && newPatientImages.length > 0) {
-      console.log('Subiendo imágenes...')
-      for (const file of newPatientImages) {
-        try {
-          const ext = file.name.split('.').pop() || 'jpg'
-          const key = `patients/${patientData.id}/${Date.now()}-${Math.random()}.${ext}`
-          const publicUrl = await uploadToR2(file, key)
-          
-          await supabase.from('patient_images').insert([{
-            patient_id: patientData.id,
-            url: publicUrl
-          }])
-        } catch (error) {
-          console.error('Error uploading image:', error)
-        }
-      }
-    }
-
     console.log('Paciente guardado exitosamente')
     loadPatients()
     setShowNewPatientForm(false)
@@ -274,30 +248,12 @@ export default function Patients() {
       document_type: '', document_number: '', emergency_contact_name: '', emergency_contact_phone: '',
       allergies: '', medical_history: '', notes: ''
     })
-    setNewPatientImages([])
-    setNewPatientImageUrls([])
-  }
-
-  const handleNewPatientImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files) return
-
-    const newFiles = Array.from(files)
-    const newUrls = newFiles.map(file => URL.createObjectURL(file))
-    
-    setNewPatientImages(prev => [...prev, ...newFiles])
-    setNewPatientImageUrls(prev => [...prev, ...newUrls])
-  }
-
-  const removeNewPatientImage = (index: number) => {
-    setNewPatientImages(prev => prev.filter((_, i) => i !== index))
-    setNewPatientImageUrls(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleSaveTreatment = async () => {
     if (!selectedPatient) return
     
-    const { data: treatmentData, error } = await supabase.from('treatments').insert([{
+    await supabase.from('treatments').insert([{
       patient_id: selectedPatient.id,
       service_id: treatmentForm.service_id || null,
       treatment_date: treatmentForm.treatment_date,
@@ -306,43 +262,9 @@ export default function Patients() {
       price_paid: treatmentForm.price_paid ? parseFloat(treatmentForm.price_paid) : null
     }]).select().single()
 
-    if (!error && treatmentData && treatmentImages.length > 0) {
-      for (const file of treatmentImages) {
-        try {
-          const key = `patients/${selectedPatient.id}/${Date.now()}-${Math.random()}.${file.name.split('.').pop()}`
-          const publicUrl = await uploadToR2(file, key)
-          
-          await supabase.from('patient_images').insert([{
-            patient_id: selectedPatient.id,
-            url: publicUrl
-          }])
-        } catch (err) {
-          console.error('Error uploading image:', err)
-        }
-      }
-    }
-
     await loadPatientDetails(selectedPatient)
     setShowNewTreatmentModal(false)
     setTreatmentForm({ service_id: '', diagnosis: '', observations: '', price_paid: '', treatment_date: new Date().toISOString().split('T')[0] })
-    setTreatmentImages([])
-    setTreatmentImageUrls([])
-  }
-
-  const handleTreatmentImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files) return
-
-    const newFiles = Array.from(files)
-    const newUrls = newFiles.map(file => URL.createObjectURL(file))
-    
-    setTreatmentImages(prev => [...prev, ...newFiles])
-    setTreatmentImageUrls(prev => [...prev, ...newUrls])
-  }
-
-  const removeTreatmentImage = (index: number) => {
-    setTreatmentImages(prev => prev.filter((_, i) => i !== index))
-    setTreatmentImageUrls(prev => prev.filter((_, i) => i !== index))
   }
 
   const deleteTreatment = async (id: string) => {
@@ -517,11 +439,6 @@ export default function Patients() {
             )}
           </div>
 
-          {/* Imágenes de Historia Clínica */}
-          <div style={{...styles.card, ...styles.cardWide}}>
-            <PatientImages patientId={selectedPatient.id} />
-          </div>
-
           {/* Card de Citas Próximas */}
           <div style={{...styles.card, ...styles.cardWide}}>
             <h3 style={styles.cardTitle}><Calendar size={18} /> Citas Próximas</h3>
@@ -581,51 +498,8 @@ export default function Patients() {
                 <div style={styles.formGroup}><label>Precio (COP)</label>
                   <input type="number" value={treatmentForm.price_paid} onChange={e => setTreatmentForm({...treatmentForm, price_paid: e.target.value})} style={styles.input} />
                 </div>
-                <div style={styles.formGroup}>
-                  <label>Imágenes</label>
-                  <div style={styles.imageUploadActions}>
-                    <label style={styles.imageUploadBtn}>
-                      <Camera size={16} />
-                      Cámara
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        multiple
-                        onChange={(e) => handleTreatmentImageSelect(e)}
-                        style={{ display: 'none' }}
-                      />
-                    </label>
-                    <label style={styles.imageUploadBtnSecondary}>
-                      <Upload size={16} />
-                      Subir
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={(e) => handleTreatmentImageSelect(e)}
-                        style={{ display: 'none' }}
-                      />
-                    </label>
-                  </div>
-                  {treatmentImageUrls.length > 0 && (
-                    <div style={styles.imagePreviewGrid}>
-                      {treatmentImageUrls.map((url, index) => (
-                        <div key={index} style={styles.imagePreviewCard}>
-                          <img src={url} alt={`Preview ${index}`} style={styles.imagePreview} />
-                          <button
-                            onClick={() => removeTreatmentImage(index)}
-                            style={styles.imageRemoveBtn}
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
                 <div style={styles.modalFooter}>
-                  <button onClick={() => { setShowNewTreatmentModal(false); setTreatmentImages([]); setTreatmentImageUrls([]) }} style={styles.cancelBtn}>Cancelar</button>
+                  <button onClick={() => setShowNewTreatmentModal(false)} style={styles.cancelBtn}>Cancelar</button>
                   <button onClick={handleSaveTreatment} style={styles.submitBtn}>Guardar</button>
                 </div>
               </div>
@@ -750,52 +624,6 @@ export default function Patients() {
             </div>
           </div>
 
-          <div style={styles.formSection}>
-            <h3 style={styles.formSectionTitle}>Imágenes de Historia Clínica</h3>
-            <div style={styles.imageUploadSection}>
-              <div style={styles.imageUploadActions}>
-                <label style={styles.imageUploadBtn}>
-                  <Camera size={16} />
-                  Cámara
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    multiple
-                    onChange={(e) => handleNewPatientImageSelect(e)}
-                    style={{ display: 'none' }}
-                  />
-                </label>
-                <label style={styles.imageUploadBtnSecondary}>
-                  <Upload size={16} />
-                  Subir desde PC
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => handleNewPatientImageSelect(e)}
-                    style={{ display: 'none' }}
-                  />
-                </label>
-              </div>
-              {newPatientImageUrls.length > 0 && (
-                <div style={styles.imagePreviewGrid}>
-                  {newPatientImageUrls.map((url, index) => (
-                    <div key={index} style={styles.imagePreviewCard}>
-                      <img src={url} alt={`Preview ${index}`} style={styles.imagePreview} />
-                      <button
-                        onClick={() => removeNewPatientImage(index)}
-                        style={styles.imageRemoveBtn}
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
           <div style={styles.formActions}>
             <button onClick={() => setShowNewPatientForm(false)} style={styles.cancelBtn}>Cancelar</button>
             <button onClick={handleSaveNewPatient} disabled={!formData.name || !formData.whatsapp || !formData.date_of_birth} style={styles.submitBtn}>
@@ -912,14 +740,6 @@ const styles: Record<string, React.CSSProperties> = {
   input: { padding: '0.75rem', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '0.875rem' },
   select: { padding: '0.75rem', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '0.875rem', backgroundColor: 'white' },
   textarea: { padding: '0.75rem', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '0.875rem', resize: 'vertical' },
-  imageUploadSection: { marginTop: '0.5rem' },
-  imageUploadActions: { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' },
-  imageUploadBtn: { display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.5rem 0.75rem', backgroundColor: '#fef5f4', color: '#e19c96', border: 'none', borderRadius: '6px', fontSize: '0.8125rem', fontWeight: 500, cursor: 'pointer' },
-  imageUploadBtnSecondary: { display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.5rem 0.75rem', backgroundColor: '#f3f4f6', color: '#6b7280', border: 'none', borderRadius: '6px', fontSize: '0.8125rem', fontWeight: 500, cursor: 'pointer' },
-  imagePreviewGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '0.5rem' },
-  imagePreviewCard: { position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e5e7eb' },
-  imagePreview: { width: '100%', height: '80px', objectFit: 'cover' },
-  imageRemoveBtn: { position: 'absolute', top: '4px', right: '4px', width: '20px', height: '20px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   formActions: { display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' },
   whatsappInputWrapper: { display: 'flex', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' },
   whatsappPrefix: { display: 'flex', alignItems: 'center', padding: '0 0.75rem', backgroundColor: '#f3f4f6', color: '#374151', fontSize: '0.875rem', fontWeight: 500, height: '100%', borderRight: '1px solid #e5e7eb' },
