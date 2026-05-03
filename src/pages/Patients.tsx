@@ -891,6 +891,9 @@ const styles: Record<string, React.CSSProperties> = {
   treatmentInfo: { display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', color: '#e19c96', marginTop: '0.375rem', fontWeight: 500 },
   patientCardRight: { display: 'flex', alignItems: 'center', gap: '1rem' },
   whatsappTag: { display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.375rem 0.75rem', backgroundColor: '#f0fdf4', color: '#16a34a', borderRadius: '20px', fontSize: '0.8125rem' },
+  whatsappBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' },
+  reviewBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', backgroundColor: '#4285f4', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' },
+  reviewSentBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', backgroundColor: '#22c55e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' },
   attentionBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', backgroundColor: '#fef5f4', color: '#e19c96', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.15s' },
   
   // Página de nuevo paciente
