@@ -28,6 +28,8 @@ interface Patient {
   document_number: string | null
   avatar_url: string | null
   created_at: string
+  treatment_count?: number
+  last_treatment?: string | null
 }
 
 interface Treatment {
@@ -39,6 +41,7 @@ interface Treatment {
   diagnosis: string | null
   observations: string | null
   price_paid: number | null
+  payment_status: 'pendiente' | 'pagado' | 'parcial' | null
   service?: { name: string }
 }
 
@@ -75,6 +78,7 @@ export default function Patients() {
   
   const [showTreatmentModal, setShowTreatmentModal] = useState(false)
   const [showNewTreatmentModal, setShowNewTreatmentModal] = useState(false)
+  const [editingTreatment, setEditingTreatment] = useState<Treatment | null>(null)
   const [selectedTreatment, setSelectedTreatment] = useState<Treatment | null>(null)
   
   const [formData, setFormData] = useState({
@@ -97,13 +101,16 @@ export default function Patients() {
     diagnosis: '',
     observations: '',
     price_paid: '',
-    treatment_date: new Date().toISOString().split('T')[0]
+    treatment_date: new Date().toISOString().split('T')[0],
+    treatment_time: new Date().toTimeString().slice(0, 5),
+    payment_status: 'pendiente'
   })
 
   const { user } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
   const [shouldOpenTreatmentModal, setShouldOpenTreatmentModal] = useState(false)
+  const [sentReviews, setSentReviews] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (!user) {
@@ -134,11 +141,17 @@ export default function Patients() {
   const loadPatients = async () => {
     const { data, error } = await supabase
       .from('patients')
-      .select('*')
+      .select('*, treatments(count, treatment_date)')
       .order('name')
     
     if (!error && data) {
-      setPatients(data)
+      // Transformar los datos para incluir el conteo de tratamientos
+      const patientsWithTreatments = data.map(p => ({
+        ...p,
+        treatment_count: p.treatments?.[0]?.count || 0,
+        last_treatment: p.treatments?.[0]?.treatment_date || null
+      }))
+      setPatients(patientsWithTreatments)
     }
     setLoading(false)
   }
@@ -163,7 +176,7 @@ export default function Patients() {
   const loadPatientDetails = async (patient: Patient) => {
     const [treatmentsData, appointmentsData] = await Promise.all([
       supabase.from('treatments').select('*, service:services(name)').eq('patient_id', patient.id).order('treatment_date', { ascending: false }),
-      supabase.from('appointments').select('*, service:services(name)').eq('patient_id', patient.id).gte('scheduled_at', new Date().toISOString()).order('scheduled_at')
+      supabase.from('appointments').select('*, service:services(name)').eq('patient_id', patient.id).order('scheduled_at', { ascending: false })
     ])
 
     if (treatmentsData.data) setTreatments(treatmentsData.data)
@@ -194,6 +207,39 @@ export default function Patients() {
       })
       const message = encodeURIComponent(`Hola ${selectedPatient.name}, te recordamos tu cita el ${date}. Por favor confirma tu asistencia.`)
       window.open(`https://wa.me/57${cleanPhone}?text=${message}`, '_blank')
+    }
+  }
+
+  const sendWhatsAppMessage = (patient: Patient) => {
+    if (patient.whatsapp) {
+      const cleanPhone = patient.whatsapp.replace(/\D/g, '')
+      // Buscar si tiene próxima cita
+      const nextAppointment = appointments.find(apt => {
+        const aptDate = new Date(apt.scheduled_at)
+        return aptDate >= new Date() && apt.status === 'confirmado'
+      })
+      
+      let message = ''
+      if (nextAppointment) {
+        const date = new Date(nextAppointment.scheduled_at).toLocaleDateString('es-ES', { 
+          weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' 
+        })
+        const serviceName = nextAppointment.service?.name || 'cita'
+        message = encodeURIComponent(`Hola ${patient.name}, te confirmamos tu ${serviceName} el ${date}. Por favor confirma tu asistencia.`)
+      } else {
+        message = encodeURIComponent(`Hola ${patient.name}, ¿cómo estás? ¿Necesitas agendar una cita?`)
+      }
+      window.open(`https://wa.me/57${cleanPhone}?text=${message}`, '_blank')
+    }
+  }
+
+  const sendGoogleReview = (patient: Patient) => {
+    if (patient.whatsapp) {
+      const cleanPhone = patient.whatsapp.replace(/\D/g, '')
+      const reviewLink = 'https://maps.app.goo.gl/TuLinkDeGoogle'
+      const message = encodeURIComponent(`Hola ${patient.name}, gracias por visitarnos. Nos encantaría que deixar tu opinión sobre nuestro servicio: ${reviewLink}`)
+      window.open(`https://wa.me/57${cleanPhone}?text=${message}`, '_blank')
+      setSentReviews(prev => new Set(prev).add(patient.id))
     }
   }
 
@@ -253,18 +299,38 @@ export default function Patients() {
   const handleSaveTreatment = async () => {
     if (!selectedPatient) return
     
-    await supabase.from('treatments').insert([{
+    const treatmentDateTime = treatmentForm.treatment_time 
+      ? `${treatmentForm.treatment_date}T${treatmentForm.treatment_time}:00`
+      : treatmentForm.treatment_date
+    
+    const treatmentData = {
       patient_id: selectedPatient.id,
       service_id: treatmentForm.service_id || null,
-      treatment_date: treatmentForm.treatment_date,
+      treatment_date: treatmentDateTime,
       diagnosis: treatmentForm.diagnosis || null,
       observations: treatmentForm.observations || null,
-      price_paid: treatmentForm.price_paid ? parseFloat(treatmentForm.price_paid) : null
-    }]).select().single()
+      price_paid: treatmentForm.price_paid ? parseFloat(treatmentForm.price_paid) : null,
+      payment_status: treatmentForm.payment_status
+    }
+
+    if (editingTreatment) {
+      await supabase.from('treatments').update(treatmentData).eq('id', editingTreatment.id)
+    } else {
+      await supabase.from('treatments').insert([treatmentData]).select().single()
+    }
 
     await loadPatientDetails(selectedPatient)
     setShowNewTreatmentModal(false)
-    setTreatmentForm({ service_id: '', diagnosis: '', observations: '', price_paid: '', treatment_date: new Date().toISOString().split('T')[0] })
+    setEditingTreatment(null)
+    setTreatmentForm({ 
+      service_id: '', 
+      diagnosis: '', 
+      observations: '', 
+      price_paid: '', 
+      treatment_date: new Date().toISOString().split('T')[0],
+      treatment_time: new Date().toTimeString().slice(0, 5),
+      payment_status: 'pendiente'
+    })
   }
 
   const deleteTreatment = async (id: string) => {
@@ -272,6 +338,21 @@ export default function Patients() {
       await supabase.from('treatments').delete().eq('id', id)
       if (selectedPatient) await loadPatientDetails(selectedPatient)
     }
+  }
+
+  const editTreatment = (treatment: Treatment) => {
+    const treatmentDate = new Date(treatment.treatment_date)
+    setEditingTreatment(treatment)
+    setTreatmentForm({
+      service_id: treatment.service_id || '',
+      diagnosis: treatment.diagnosis || '',
+      observations: treatment.observations || '',
+      price_paid: treatment.price_paid?.toString() || '',
+      treatment_date: treatmentDate.toISOString().split('T')[0],
+      treatment_time: treatmentDate.toTimeString().slice(0, 5),
+      payment_status: treatment.payment_status || 'pendiente'
+    })
+    setShowNewTreatmentModal(true)
   }
 
   // === VISTA DE PÁGINA COMPLETA DE PACIENTE ===
@@ -481,13 +562,26 @@ export default function Patients() {
               </div>
               <div style={styles.modalBody}>
                 <div style={styles.formGroup}><label>Servicio</label>
-                  <select value={treatmentForm.service_id} onChange={e => setTreatmentForm({...treatmentForm, service_id: e.target.value})} style={styles.select}>
+                  <select 
+                    value={treatmentForm.service_id} 
+                    onChange={e => {
+                      const selectedService = services.find(s => s.id === e.target.value)
+                      setTreatmentForm({
+                        ...treatmentForm, 
+                        service_id: e.target.value,
+                        price_paid: selectedService ? selectedService.price.toString() : ''
+                      })
+                    }} 
+                    style={styles.select}>
                     <option value="">Seleccionar...</option>
-                    {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {services.map(s => <option key={s.id} value={s.id}>{s.name} - {formatPrice(s.price)}</option>)}
                   </select>
                 </div>
                 <div style={styles.formGroup}><label>Fecha</label>
-                  <input type="date" value={treatmentForm.treatment_date} onChange={e => setTreatmentForm({...treatmentForm, treatment_date: e.target.value})} style={styles.input} />
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input type="date" value={treatmentForm.treatment_date} onChange={e => setTreatmentForm({...treatmentForm, treatment_date: e.target.value})} style={{...styles.input, flex: 1}} />
+                    <input type="time" value={treatmentForm.treatment_time} onChange={e => setTreatmentForm({...treatmentForm, treatment_time: e.target.value})} style={{...styles.input, width: '120px'}} />
+                  </div>
                 </div>
                 <div style={styles.formGroup}><label>Diagnóstico</label>
                   <LexicalEditor value={treatmentForm.diagnosis} onChange={(val) => setTreatmentForm({...treatmentForm, diagnosis: val})} placeholder="Diagnóstico del paciente..." />
@@ -497,6 +591,18 @@ export default function Patients() {
                 </div>
                 <div style={styles.formGroup}><label>Precio (COP)</label>
                   <input type="number" value={treatmentForm.price_paid} onChange={e => setTreatmentForm({...treatmentForm, price_paid: e.target.value})} style={styles.input} />
+                </div>
+                <div style={styles.formGroup}>
+                  <label>Estado de Pago</label>
+                  <select 
+                    value={treatmentForm.payment_status} 
+                    onChange={e => setTreatmentForm({...treatmentForm, payment_status: e.target.value})}
+                    style={styles.select}
+                  >
+                    <option value="pendiente">Pendiente</option>
+                    <option value="pagado">Pagado</option>
+                    <option value="parcial">Parcial</option>
+                  </select>
                 </div>
                 <div style={styles.modalFooter}>
                   <button onClick={() => setShowNewTreatmentModal(false)} style={styles.cancelBtn}>Cancelar</button>
@@ -511,13 +617,49 @@ export default function Patients() {
         {showTreatmentModal && selectedTreatment && (
           <div style={styles.modalOverlay} onClick={() => setShowTreatmentModal(false)}>
             <div style={styles.modal} onClick={e => e.stopPropagation()}>
-              <div style={styles.modalHeader}><h3>Detalle de Atención</h3><button onClick={() => setShowTreatmentModal(false)}><X size={20} /></button></div>
+              <div style={styles.modalHeader}>
+                <h3>Detalle de Atención</h3>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button onClick={() => { setShowTreatmentModal(false); editTreatment(selectedTreatment) }} style={styles.editBtnSmall} title="Editar">
+                    <Pencil size={16} />
+                  </button>
+                  <button onClick={() => setShowTreatmentModal(false)}><X size={20} /></button>
+                </div>
+              </div>
               <div style={styles.modalBody}>
-                <div style={styles.detailRow}><span>Fecha:</span> <span>{new Date(selectedTreatment.treatment_date).toLocaleDateString('es-ES')}</span></div>
-                <div style={styles.detailRow}><span>Servicio:</span> <span>{selectedTreatment.service?.name || '-'}</span></div>
-                {selectedTreatment.diagnosis && <div style={styles.detailRow}><span>Diagnóstico:</span> <span>{selectedTreatment.diagnosis}</span></div>}
-                {selectedTreatment.observations && <div style={styles.detailRow}><span>Observaciones:</span> <span>{selectedTreatment.observations}</span></div>}
-                {selectedTreatment.price_paid && <div style={styles.detailRow}><span>Precio:</span> <span style={styles.priceValue}>{formatPrice(selectedTreatment.price_paid)}</span></div>}
+                <div style={styles.detailSection}>
+                  <h4 style={styles.detailSectionTitle}>Información Principal</h4>
+                  <div style={styles.detailRow}><span style={styles.detailLabel}>Fecha:</span> <span>{new Date(selectedTreatment.treatment_date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span></div>
+                  <div style={styles.detailRow}><span style={styles.detailLabel}>Servicio:</span> <span style={styles.serviceValue}>{selectedTreatment.service?.name || 'Sin servicio'}</span></div>
+                  {selectedTreatment.price_paid && <div style={styles.detailRow}><span style={styles.detailLabel}>Precio Pagado:</span> <span style={styles.priceValue}>{formatPrice(selectedTreatment.price_paid)}</span></div>}
+                </div>
+
+                {selectedTreatment.diagnosis && (
+                  <div style={styles.detailSection}>
+                    <h4 style={styles.detailSectionTitle}>Diagnóstico</h4>
+                    <div style={styles.textContent} dangerouslySetInnerHTML={{ __html: selectedTreatment.diagnosis }} />
+                  </div>
+                )}
+
+                {selectedTreatment.observations && (
+                  <div style={styles.detailSection}>
+                    <h4 style={styles.detailSectionTitle}>Observaciones</h4>
+                    <div style={styles.textContent} dangerouslySetInnerHTML={{ __html: selectedTreatment.observations }} />
+                  </div>
+                )}
+
+                {appointments.length > 0 && (
+                  <div style={styles.detailSection}>
+                    <h4 style={styles.detailSectionTitle}>Próxima Cita</h4>
+                    {appointments.slice(0, 1).map(apt => (
+                      <div key={apt.id} style={styles.nextAppointment}>
+                        <Calendar size={16} />
+                        <span>{new Date(apt.scheduled_at).toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' })}</span>
+                        <span style={styles.appointmentStatus}>{apt.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -678,6 +820,15 @@ export default function Patients() {
                       <span>• {patient.document_type} {patient.document_number}</span>
                     )}
                   </div>
+                  {(patient.treatment_count !== undefined && patient.treatment_count > 0) && (
+                    <div style={styles.treatmentInfo}>
+                      <Stethoscope size={12} />
+                      <span>{patient.treatment_count} atención{patient.treatment_count > 1 ? 'es' : ''}</span>
+                      {patient.last_treatment && (
+                        <span>•Últ: {new Date(patient.last_treatment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div style={styles.patientCardRight}>
@@ -705,23 +856,24 @@ export default function Patients() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { display: 'flex', flexDirection: 'column', gap: '1.5rem' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
+  container: { display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1rem' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' },
   title: { fontSize: '1.75rem', fontWeight: 700, color: '#1f2937', margin: 0 },
   subtitle: { fontSize: '0.875rem', color: '#6b7280', marginTop: '0.25rem' },
   addButton: { display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1rem', backgroundColor: '#e19c96', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer' },
   toolbar: { display: 'flex', gap: '1rem' },
-  searchBox: { display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.625rem 1rem', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', flex: 1, maxWidth: '500px' },
+  searchBox: { display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.625rem 1rem', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', flex: '1 1 100%', maxWidth: '500px' },
   searchInput: { border: 'none', outline: 'none', fontSize: '0.875rem', width: '100%', color: '#1f2937' },
   loading: { textAlign: 'center', padding: '3rem', color: '#6b7280' },
   empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem', backgroundColor: 'white', borderRadius: '12px', gap: '1rem', color: '#9ca3af' },
   patientsList: { display: 'flex', flexDirection: 'column', gap: '0.75rem' },
-  patientCard: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', cursor: 'pointer', transition: 'transform 0.15s' },
+  patientCard: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', cursor: 'pointer', transition: 'transform 0.15s', flexWrap: 'wrap' },
   patientCardLeft: { display: 'flex', alignItems: 'center', gap: '1rem' },
   avatar: { width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#fef5f4', color: '#e19c96', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', fontWeight: 600 },
   patientInfo: {},
   patientName: { fontSize: '1rem', fontWeight: 600, color: '#1f2937', margin: 0 },
   patientMeta: { display: 'flex', gap: '0.5rem', fontSize: '0.8125rem', color: '#6b7280', marginTop: '0.25rem' },
+  treatmentInfo: { display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', color: '#e19c96', marginTop: '0.375rem', fontWeight: 500 },
   patientCardRight: { display: 'flex', alignItems: 'center', gap: '1rem' },
   whatsappTag: { display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.375rem 0.75rem', backgroundColor: '#f0fdf4', color: '#16a34a', borderRadius: '20px', fontSize: '0.8125rem' },
   attentionBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', backgroundColor: '#fef5f4', color: '#e19c96', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.15s' },
@@ -790,6 +942,13 @@ const styles: Record<string, React.CSSProperties> = {
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderBottom: '1px solid #e5e7eb' },
   modalBody: { padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' },
   modalFooter: { display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' },
-  detailRow: { display: 'flex', justifyContent: 'space-between' },
+  detailRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0' },
+  detailSection: { padding: '0.75rem', backgroundColor: '#f9fafb', borderRadius: '8px' },
+  detailSectionTitle: { fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' },
+  detailLabel: { color: '#6b7280', fontSize: '0.875rem' },
+  serviceValue: { fontWeight: 600, color: '#1f2937' },
+  textContent: { fontSize: '0.875rem', color: '#4b5563', lineHeight: 1.6 },
+  nextAppointment: { display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', backgroundColor: '#fef5f4', borderRadius: '8px', color: '#e19c96', fontWeight: 500 },
+  appointmentStatus: { marginLeft: 'auto', padding: '0.25rem 0.5rem', backgroundColor: '#dcfce7', borderRadius: '4px', fontSize: '0.75rem', color: '#16a34a' },
   priceValue: { fontWeight: 600, color: '#22c55e' },
 }

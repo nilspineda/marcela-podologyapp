@@ -9,7 +9,7 @@ import interactionPlugin from '@fullcalendar/interaction'
 import LexicalEditor from '../components/LexicalEditor'
 import { 
   Plus, Trash2, X, Clock, User, Calendar, MessageCircle, 
-  CheckCircle, ChevronRight
+  CheckCircle, ChevronRight, Phone, Mail
 } from 'lucide-react'
 
 interface Appointment {
@@ -52,6 +52,10 @@ const statusLabels: Record<string, string> = {
   pospuesto: 'Pospuesto',
   cancelado: 'Cancelado',
   completado: 'Completado',
+}
+
+const formatPrice = (price: number) => {
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(price)
 }
 
 export default function Appointments() {
@@ -520,6 +524,24 @@ export default function Appointments() {
                 <span style={styles.detailLabel}><User size={16} /> Paciente</span>
                 <span style={styles.detailValue}>{selectedAppointment.patient?.name}</span>
               </div>
+              {selectedAppointment.patient?.phone && (
+                <div style={styles.detailRow}>
+                  <span style={styles.detailLabel}><Phone size={16} /> Teléfono</span>
+                  <span style={styles.detailValue}>{selectedAppointment.patient.phone}</span>
+                </div>
+              )}
+              {selectedAppointment.patient?.email && (
+                <div style={styles.detailRow}>
+                  <span style={styles.detailLabel}><Mail size={16} /> Email</span>
+                  <span style={styles.detailValue}>{selectedAppointment.patient.email}</span>
+                </div>
+              )}
+              {selectedAppointment.service && (
+                <div style={styles.detailRow}>
+                  <span style={styles.detailLabel}>Servicio</span>
+                  <span style={styles.detailValue}>{selectedAppointment.service.name} - {formatPrice(selectedAppointment.service.price)}</span>
+                </div>
+              )}
               <div style={styles.detailRow}>
                 <span style={styles.detailLabel}><Calendar size={16} /> Fecha</span>
                 <span style={styles.detailValue}>

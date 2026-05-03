@@ -5,6 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Marcela - Podología</title>
+    <style>
+      /* Responsive styles - targeting inline styles via attribute selectors */
+      @media (max-width: 768px) {
+        /* Make content full width on mobile */
+        div[style*="marginLeft: 260px"] {
+          margin-left: 0 !important;
+          width: 100% !important;
+        }
+        /* Hide sidebar on mobile */
+        aside[style*="position: fixed"] {
+          display: none !important;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

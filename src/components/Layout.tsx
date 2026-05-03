@@ -222,6 +222,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginLeft: '260px',
     display: 'flex',
     flexDirection: 'column',
+    width: 'calc(100% - 260px)',
   },
   header: {
     height: '64px',
