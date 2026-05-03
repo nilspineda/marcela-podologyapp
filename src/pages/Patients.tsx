@@ -6,7 +6,7 @@ import {
   Plus, Search, Pencil, Trash2, X, User, Phone, Mail, Calendar, 
   MessageCircle, Clock, Eye, Stethoscope, FileText,
   ChevronLeft, AlertCircle, Bell, MapPin, CreditCard, UserPlus,
-  ArrowLeft
+  ArrowLeft, Star
 } from 'lucide-react'
 import LexicalEditor from '../components/LexicalEditor'
 
@@ -110,7 +110,10 @@ export default function Patients() {
   const navigate = useNavigate()
   const location = useLocation()
   const [shouldOpenTreatmentModal, setShouldOpenTreatmentModal] = useState(false)
-  const [sentReviews, setSentReviews] = useState<Set<string>>(new Set())
+  const [sentReviews, setSentReviews] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('sentReviews')
+    return saved ? new Set(JSON.parse(saved)) : new Set()
+  })
 
   useEffect(() => {
     if (!user) {
@@ -141,15 +144,34 @@ export default function Patients() {
   const loadPatients = async () => {
     const { data, error } = await supabase
       .from('patients')
-      .select('*, treatments(count, treatment_date)')
+      .select('*')
       .order('name')
     
     if (!error && data) {
-      // Transformar los datos para incluir el conteo de tratamientos
+      // Cargar datos de tratamientos para cada paciente
+      const { data: treatmentsData } = await supabase
+        .from('treatments')
+        .select('patient_id, treatment_date')
+        .order('treatment_date', { ascending: false })
+      
+      const treatmentMap: Record<string, { count: number; last_date: string | null }> = {}
+      
+      if (treatmentsData) {
+        treatmentsData.forEach(t => {
+          if (!treatmentMap[t.patient_id]) {
+            treatmentMap[t.patient_id] = { count: 0, last_date: null }
+          }
+          treatmentMap[t.patient_id].count++
+          if (!treatmentMap[t.patient_id].last_date && t.treatment_date) {
+            treatmentMap[t.patient_id].last_date = t.treatment_date
+          }
+        })
+      }
+      
       const patientsWithTreatments = data.map(p => ({
         ...p,
-        treatment_count: p.treatments?.[0]?.count || 0,
-        last_treatment: p.treatments?.[0]?.treatment_date || null
+        treatment_count: treatmentMap[p.id]?.count || 0,
+        last_treatment: treatmentMap[p.id]?.last_date || null
       }))
       setPatients(patientsWithTreatments)
     }
@@ -237,9 +259,11 @@ export default function Patients() {
     if (patient.whatsapp) {
       const cleanPhone = patient.whatsapp.replace(/\D/g, '')
       const reviewLink = 'https://g.page/r/CUwHwdgTs1RjEBM/review'
-      const message = encodeURIComponent(`Hola ${patient.name}, gracias por visitarnos. Nos encantaría que deixar tu opinión sobre nuestro servicio: ${reviewLink}`)
+      const message = encodeURIComponent(`Hola ${patient.name}, gracias por visitarnos. Nos encantaría que nos dejaras tu opinión sobre nuestro servicio: ${reviewLink}`)
       window.open(`https://wa.me/57${cleanPhone}?text=${message}`, '_blank')
-      setSentReviews(prev => new Set(prev).add(patient.id))
+      const newSet = new Set(sentReviews).add(patient.id)
+      setSentReviews(newSet)
+      localStorage.setItem('sentReviews', JSON.stringify([...newSet]))
     }
   }
 
@@ -825,7 +849,7 @@ export default function Patients() {
                       <Stethoscope size={12} />
                       <span>{patient.treatment_count} atención{patient.treatment_count > 1 ? 'es' : ''}</span>
                       {patient.last_treatment && (
-                        <span>•Últ: {new Date(patient.last_treatment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                        <span>• Última: {new Date(patient.last_treatment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
                       )}
                     </div>
                   )}
@@ -856,7 +880,10 @@ export default function Patients() {
                       style={sentReviews.has(patient.id) ? styles.reviewSentBtn : styles.reviewBtn}
                       title="Enviar review"
                     >
-                      {sentReviews.has(patient.id) ? '✓' : '⭐'}
+                      <Star size={14} />
+                      <span style={{ fontSize: '0.7rem', marginLeft: '2px' }}>
+                        {sentReviews.has(patient.id) ? 'Enviado' : 'Review'}
+                      </span>
                     </button>
                   </div>
                 )}
@@ -892,8 +919,8 @@ const styles: Record<string, React.CSSProperties> = {
   patientCardRight: { display: 'flex', alignItems: 'center', gap: '1rem' },
   whatsappTag: { display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.375rem 0.75rem', backgroundColor: '#f0fdf4', color: '#16a34a', borderRadius: '20px', fontSize: '0.8125rem' },
   whatsappBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' },
-  reviewBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', backgroundColor: '#4285f4', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' },
-  reviewSentBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', backgroundColor: '#22c55e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' },
+  reviewBtn: { display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.375rem 0.5rem', backgroundColor: '#4285f4', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', whiteSpace: 'nowrap' },
+  reviewSentBtn: { display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.375rem 0.5rem', backgroundColor: '#22c55e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', whiteSpace: 'nowrap' },
   attentionBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', backgroundColor: '#fef5f4', color: '#e19c96', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.15s' },
   
   // Página de nuevo paciente
