@@ -236,7 +236,7 @@ export default function Patients() {
   const sendGoogleReview = (patient: Patient) => {
     if (patient.whatsapp) {
       const cleanPhone = patient.whatsapp.replace(/\D/g, '')
-      const reviewLink = 'https://maps.app.goo.gl/TuLinkDeGoogle'
+      const reviewLink = 'https://g.page/r/CUwHwdgTs1RjEBM/review'
       const message = encodeURIComponent(`Hola ${patient.name}, gracias por visitarnos. Nos encantaría que deixar tu opinión sobre nuestro servicio: ${reviewLink}`)
       window.open(`https://wa.me/57${cleanPhone}?text=${message}`, '_blank')
       setSentReviews(prev => new Set(prev).add(patient.id))
